@@ -8,19 +8,15 @@ import (
 	"strings"
 
 	"github.com/go-gota/gota/dataframe"
+	"github.com/go-gota/gota/series"
 	"golang.org/x/text/encoding/korean"
 	"golang.org/x/text/transform"
 )
 
 // URL samsung
-var URL string = "https://finance.naver.com/item/main.nhn?code=005930" // 삼성전자
-// URL1 investorDealTrendDay
-var URL1 string = "https://finance.naver.com/sise/investorDealTrendDay.nhn?bizdate=" // 동향
 var URL_KRX string = "http://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13"
 var (
-	now_price  string
-	prev_price string
-	cs         []dataframe.DataFrame
+	stockCodeName dataframe.DataFrame
 )
 
 func GetKrxData() {
@@ -51,10 +47,33 @@ func GetKrxData() {
 	// parser 를 이용하여 가져온 html 태그를 gota 의 ReadHTML 를 이용하여 dataframe 형식으로 전달
 	// 자동으로 hasHeader는 true 로 지정되어 있음.
 	// ReadHTML 를 사용하지 않고, goquery 를 사용해도 되나, 만들어진 ReadHTML를 사용하고 싶어서 삽질 후 성공!!
-	cs = dataframe.ReadHTML(strings.NewReader(htmlUTF8))
+	cs := dataframe.ReadHTML(strings.NewReader(htmlUTF8), dataframe.DetectTypes(false), dataframe.DefaultType(series.String))[0]
+
+	// 필요한 정보만 Select
+	// code번호를 6자리로 바꾸고, 헤더를 영어로 변경
+	stockCodeName = cs.Rename("company", "회사명").
+		Rename("code", "종목코드").
+		Select([]string{"code", "company"})
+
+	/*
+		!!! 기록용 !!!
+		series 를 하나 떼어 낸 다음에, 0을 붙일 수 있다.
+		Map을 이용하여 함수를 호출하여 하나씩 변경.
+		하지만, series의 type이 변경되지 않기 때문에 역시나 다시 00을 붙이더라도, input 할 때 다시 0이 사라진다.
+		일단은 해결하지 못했지만, 값을 읽어들일 때 string형식으로 삽입하면 해결 됨.
+
+		sel2 := sel1.Col("code")
+		zeroFill := func(e series.Element) series.Element {
+			result := e.Copy()
+			zeroResult := fmt.Sprintf("%06s", result.String())
+			result.Set(zeroResult)
+			return series.Element(result)
+		}
+		received := sel2.Map(zeroFill)
+	*/
 
 }
 func main() {
 	GetKrxData()
-	fmt.Print(cs)
+	fmt.Print(stockCodeName)
 }
