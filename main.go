@@ -6,20 +6,25 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/go-gota/gota/dataframe"
 	"github.com/go-gota/gota/series"
 	"golang.org/x/text/encoding/korean"
 	"golang.org/x/text/transform"
+
+	"database/sql"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // URL samsung
 var URL_KRX string = "http://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13"
 var (
-	stockCodeName dataframe.DataFrame
+	companyInfo dataframe.DataFrame
 )
 
-func GetKrxData() {
+func GetCompanyInfo() {
 	// krx 홈페이지에 접속하여 request
 	resp, err := http.Get(URL_KRX)
 	if err != nil {
@@ -33,7 +38,7 @@ func GetKrxData() {
 	}
 
 	// gota BUG 로 추정, ReadHTML에서 <th> 를 제목으로 인식못함. <th> -> <td> 로 변경해야함.
-	re1, _ := regexp.Compile("(<[\\/]?)th")
+	re1, _ := regexp.Compile(`(<[/]?)th`)
 	html := re1.ReplaceAllString(string(data), "${1}td")
 
 	// 한글인코딩이 깨져서, 한글을 UTF8로 변환? 헷갈리는 부분.
@@ -51,7 +56,7 @@ func GetKrxData() {
 
 	// 필요한 정보만 Select
 	// code번호를 6자리로 바꾸고, 헤더를 영어로 변경
-	stockCodeName = cs.Rename("company", "회사명").
+	companyInfo = cs.Rename("company", "회사명").
 		Rename("code", "종목코드").
 		Select([]string{"code", "company"})
 
@@ -73,7 +78,67 @@ func GetKrxData() {
 	*/
 
 }
+
+func CreateCompanyInfoTable() {
+	db, err := sql.Open("mysql", "root:zhfeman@tcp(192.168.29.209:3306)/MUQUANT")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer db.Close()
+
+	// Connect and check the server version
+	//var version string
+	sql := `CREATE TABLE IF NOT EXISTS company_info (
+            	code VARCHAR(20),
+                company VARCHAR(40),
+                last_update DATE,
+                PRIMARY KEY(CODE) )`
+	db.Exec(sql)
+
+	sql = `CREATE TABLE IF NOT EXISTS daily_price (
+        		code VARCHAR(20),
+            	date DATE,
+            	open BIGINT(20),
+            	high BIGINT(20),
+            	low BIGINT(20),
+            	close BIGINT(20),
+            	diff BIGINT(20),
+            	volume BIGINT(20),
+            	PRIMARY KEY(code, date) )`
+
+	db.Exec(sql)
+
+	//fmt.Println("Connected to:", version)
+}
+
+func UpdateCompanyInfo() {
+	db, err := sql.Open("mysql", "root:zhfeman@tcp(192.168.29.209:3306)/MUQUANT")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer db.Close()
+
+	today := time.Now().Format("2006-01-02")
+
+	for i := 0; i < companyInfo.Nrow(); i++ {
+		// 선택하는 방법이 pandas에 비해서 매끄럽지 못함.
+		// 2가지 방법이 있을 것 같은데.. 조금 더 범용성을 주고자 Column을 선택할 수 있게 함.
+		// 추후, code, company 외의 더 자료가 필요할 경우를 대비.
+		// code := companyInfo.Elem(i, 0).String()
+		// code1 := companyInfo.Elem(i, 1).String()
+		codeMap := companyInfo.Subset(i).Maps()[0]
+		code := codeMap["code"]
+		company := codeMap["company"]
+
+		sql := fmt.Sprintf("REPLACE INTO company_info ( code, company, last_update ) VALUES ('%s', '%s', '%s')", code, company, today)
+		db.Exec(sql)
+	}
+}
+
 func main() {
-	GetKrxData()
-	fmt.Print(stockCodeName)
+	GetCompanyInfo()
+	CreateCompanyInfoTable()
+	UpdateCompanyInfo()
+
+	fmt.Print()
 }
