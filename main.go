@@ -140,5 +140,5 @@ func main() {
 	CreateCompanyInfoTable()
 	UpdateCompanyInfo()
 
-	fmt.Print()
+	fmt.Println("test")
 }
