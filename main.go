@@ -3,11 +3,14 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/go-gota/gota/dataframe"
 	"github.com/go-gota/gota/series"
 	"golang.org/x/text/encoding/korean"
@@ -20,6 +23,7 @@ import (
 
 // URL samsung
 var URL_KRX string = "http://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13"
+var URL_NAVER_STOCK string = "https://finance.naver.com/item/sise_day.nhn?code="
 var (
 	companyInfo dataframe.DataFrame
 )
@@ -51,7 +55,7 @@ func GetCompanyInfo() {
 
 	// parser 를 이용하여 가져온 html 태그를 gota 의 ReadHTML 를 이용하여 dataframe 형식으로 전달
 	// 자동으로 hasHeader는 true 로 지정되어 있음.
-	// ReadHTML 를 사용하지 않고, goquery 를 사용해도 되나, 만들어진 ReadHTML를 사용하고 싶어서 삽질 후 성공!!
+	// ReadHTML 를 사용하지 않고, gota 를 사용해도 되나, 만들어진 ReadHTML를 사용하고 싶어서 삽질 후 성공!!
 	cs := dataframe.ReadHTML(strings.NewReader(htmlUTF8), dataframe.DetectTypes(false), dataframe.DefaultType(series.String))[0]
 
 	// 필요한 정보만 Select
@@ -135,10 +139,183 @@ func UpdateCompanyInfo() {
 	}
 }
 
+func ReadNaver(code string) {
+	startTime := time.Now()
+
+	url := URL_NAVER_STOCK + code
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	req.Header.Add("User-agent", "Mozilla/5.0")
+
+	client := &http.Client{}
+	res, _ := client.Do(req)
+	if res.StatusCode != 200 {
+		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
+	}
+	defer res.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tempHref, _ := doc.Find(".pgRR a").Attr("href")
+	tempPgrr := strings.Split(tempHref, "=")
+	pgrr, _ := strconv.Atoi(tempPgrr[len(tempPgrr)-1])
+
+	//var df dataframe.DataFrame
+	// df := dataframe.New(
+	// 	series.New("1", series.String, "date"),
+	// 	series.New(1, series.Int, "close"),
+	// 	series.New(1, series.Int, "diff"),
+	// 	series.New(1, series.Int, "open"),
+	// 	series.New(1, series.Int, "high"),
+	// 	series.New(1, series.Int, "low"),
+	// 	series.New(1, series.Int, "volume"),
+	// )
+
+	crawlStockInfo := make([][]string, 7)
+
+	for pageNum := 1; pageNum <= pgrr; pageNum++ {
+
+		pageURL := fmt.Sprintf("%s&page=%d", url, pageNum)
+		req2, err := http.NewRequest("GET", pageURL, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+		req2.Header.Add("User-agent", "Mozilla/5.0")
+
+		client2 := &http.Client{}
+		res2, _ := client2.Do(req2)
+		if res.StatusCode != 200 {
+			log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
+		}
+		defer res2.Body.Close()
+
+		// data, err := ioutil.ReadAll(res2.Body)
+		// if err != nil {
+		// 	panic(err)
+		// }
+		// data2 := string(data)
+		// file1, err := os.Create("output.txt") // output.txt 파일 열기
+		// if err != nil {
+		// 	panic(err)
+		// }
+		// defer file1.Close() // main 함수가 끝나기 직전에 파일을 닫음
+		// fmt.Fprint(file1, data2)
+
+		doc2, err := goquery.NewDocumentFromReader(res2.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		//df.SetNames("date", "close", "diff", "open", "high", "low", "volume")
+		// doc2.Find("tr").Each(func(idx int, sel *goquery.Selection) {
+		// 	if sel.Find("td").Length() == 7 {
+		// 		var crawlStockInfo []string
+
+		// 		sel.Find("td").Each(func(idx2 int, sel2 *goquery.Selection) {
+		// 			tt := strings.ReplaceAll(sel2.Text(), "\n", "")
+		// 			tt = strings.ReplaceAll(tt, "\t", "")
+		// 			crawlStockInfo = append(crawlStockInfo, tt)
+		// 		})
+		// 		addRow := dataframe.New(
+		// 			series.New(crawlStockInfo[0], series.String, "date"),
+		// 			series.New(crawlStockInfo[1], series.String, "close"),
+		// 			series.New(crawlStockInfo[2], series.String, "diff"),
+		// 			series.New(crawlStockInfo[3], series.String, "open"),
+		// 			series.New(crawlStockInfo[4], series.String, "high"),
+		// 			series.New(crawlStockInfo[5], series.String, "low"),
+		// 			series.New(crawlStockInfo[6], series.String, "volume"),
+		// 		)
+		// 		df = df.RBind(addRow)
+		// 	}
+		// })
+		//df.SetNames("date", "close", "diff", "open", "high", "low", "volume")
+		doc2.Find("tr").Each(func(idx int, sel *goquery.Selection) {
+			if sel.Find("td").Length() == 7 {
+				sel.Find("td").Each(func(idx2 int, sel2 *goquery.Selection) {
+					if idx2 == 2 {
+						tt := strings.ReplaceAll(sel2.Text(), "\n", "")
+						tt = strings.ReplaceAll(tt, "\t", "")
+						crawlStockInfo[idx2] = append(crawlStockInfo[idx2], tt)
+					} else {
+						crawlStockInfo[idx2] = append(crawlStockInfo[idx2], sel2.Text())
+						// 재밌는 사실.. C++ 의 vector처럼 미리 make로 할당하지 않아도, 시간은 동일
+						// append를 하면 시간이 더 오래 걸릴 것 같지만, 미리할당하고 아래와 같이 사용해도 동일하다.
+						// crawlStockInfo[idx2][count] = tt
+					}
+				})
+			}
+		})
+	}
+
+	df := dataframe.New(
+		series.New(crawlStockInfo[0], series.String, "date"),
+		series.New(crawlStockInfo[1], series.String, "close"),
+		series.New(crawlStockInfo[2], series.Int, "diff"),
+		series.New(crawlStockInfo[3], series.Int, "open"),
+		series.New(crawlStockInfo[4], series.Int, "high"),
+		series.New(crawlStockInfo[5], series.Int, "low"),
+		series.New(crawlStockInfo[6], series.Int, "volume"),
+	)
+	_ = df
+	endTime := time.Now()
+	fmt.Println(endTime.Sub(startTime))
+
+	// 한글인코딩이 깨져서, 한글을 UTF8로 변환? 헷갈리는 부분.
+	// 보통 NewEncoder()로 UTF8 -> euc-kr 로 변환해서 출력해야하는데...
+	// 이상하게 반대로 euc-kr -> UTF8 로 변환해서 출력해야 잘 됨.
+	// htmlUTF8, _, err := transform.String(korean.EUCKR.NewDecoder(), html)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println(htmlUTF8)
+	// // parser 를 이용하여 가져온 html 태그를 gota 의 ReadHTML 를 이용하여 dataframe 형식으로 전달
+	// // 자동으로 hasHeader는 true 로 지정되어 있음.
+	// // ReadHTML 를 사용하지 않고, gota 를 사용해도 되나, 만들어진 ReadHTML를 사용하고 싶어서 삽질 후 성공!!
+	// cs := dataframe.ReadHTML(strings.NewReader(htmlUTF8))[0]
+
+	// // 필요한 정보만 Select
+	// // code번호를 6자리로 바꾸고, 헤더를 영어로 변경
+	// companyInfo = cs.Rename("date", "날짜").
+	// 	Rename("close", "종가").
+	// 	Rename("diff", "전일비").
+	// 	Rename("open", "시가").
+	// 	Rename("high", "고가").
+	// 	Rename("low", "저가").
+	// 	Rename("volume", "거래량").
+	// 	Select([]string{"date", "open", "high", "low", "close", "diff", "volume"})
+
+	// for page := 1; page <= pgrr; page++ {
+	// 	pageURL := fmt.Sprintf("%s&page=%s", url, page)
+
+	// }
+
+	// doc.Find(".pgRR a").Each(func(i int, s *goquery.Selection) {
+	// 	value, isExist := s.Attr("href")
+	// 	fmt.Println(value, isExist)
+	// 	fmt.Println("현재 위치 :", i)
+	// 	fmt.Println("현재 태그 :", goquery.NodeName(s))
+	// })
+
+}
+
+func UpdateStockInfo() {
+	seriesCompanyCode := companyInfo.Col("code")
+
+	for i := 0; i < seriesCompanyCode.Len(); i++ {
+		code := seriesCompanyCode.Val(i).(string)
+
+		ReadNaver(code)
+	}
+}
+
 func main() {
 	GetCompanyInfo()
 	CreateCompanyInfoTable()
 	UpdateCompanyInfo()
-
-	fmt.Println("test")
+	UpdateStockInfo()
 }
