@@ -22,6 +22,7 @@ GO 를 이용하여 취미로 시작하는 퀀트 프로젝트
  - pandas : github.com/go-gota/gota/dataframe, github.com/go-gota/gota/series
 
 <br>
+
 ## Memo
 - 디버깅시 unused 에러를 피하기 위해선, ` _ = df ` 와 같이 임시로 사용
 
