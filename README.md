@@ -1,6 +1,6 @@
 # muquant_crawler(돌연변이 퀀트) - My first GO project
 GO 를 이용하여 취미로 시작하는 퀀트 프로젝트
- - Python pandas, BeautifulSoup를 이용하여 프로젝트 진행 중, 크롤링이 너무 오래 걸려, go lang을 이용하여 사용해보기로 결심.
+ - Python pandas, BeautifulSoup를 이용하여 프로젝트 진행 중, 크롤링이 너무너무 오래 걸려 go lang으로 코딩해보기로 결심.
 
 
 ### Step1) krx 종목코드 크롤링
