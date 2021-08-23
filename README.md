@@ -26,7 +26,10 @@ GO 를 이용하여 취미로 시작하는 퀀트 프로젝트
 ## Memo
 - 디버깅시 unused 에러를 피하기 위해선, ` _ = df ` 와 같이 임시로 사용
 
-
+- 이중 slice 만들기 / 데이터 삽입은 append 이용
+```
+crawlStockInfo := make([][]string, 7)
+```
 - request 헤더 변경
 ```
 pageURL := fmt.Sprintf("%s&page=%d", url, pageNum)
@@ -51,6 +54,24 @@ tempPgrr := strings.Split(tempHref, "=")
 pgrr, _ := strconv.Atoi(tempPgrr[len(tempPgrr)-1])
 ```
 
+- jQuery 에서 Find, Each 사용
+```
+// tr을 찾은 후, tr의 자식노드(td)가 7인 경우만 로드를 시작.
+// 자식노드(td)의 값을 하나씩 불러와서 화이트스페이스 제거 후, 값만 추출하여 slice에 삽입
+doc2.Find("tr").Each(func(idx int, sel *goquery.Selection) {
+	if sel.Find("td").Length() == 7 {
+		sel.Find("td").Each(func(idx2 int, sel2 *goquery.Selection) {
+			if idx2 == 2 {
+				tt := strings.ReplaceAll(sel2.Text(), "\n", "")
+				tt = strings.ReplaceAll(tt, "\t", "")
+				crawlStockInfo[idx2] = append(crawlStockInfo[idx2], tt)
+			} else {
+				crawlStockInfo[idx2] = append(crawlStockInfo[idx2], sel2.Text())
+			}
+		})
+	}
+})
+```
 - golang slice 사용 (make 로 미리 할당하나, append로 하나씩 넣어주나 시간복잡도 비슷한 것으로 추정)
 `crawlStockInfo := make([][]string, 7)`
 
@@ -72,13 +93,76 @@ fmt.Println(endTime.Sub(startTime))
 ```
 
 - gota Rbind 이용하여 삽입
+```
+addRow := dataframe.New(
+	series.New(crawlStockInfo[0], series.String, "date"),
+	series.New(crawlStockInfo[1], series.String, "close"),
+	series.New(crawlStockInfo[2], series.String, "diff"),
+	series.New(crawlStockInfo[3], series.String, "open"),
+	series.New(crawlStockInfo[4], series.String, "high"),
+	series.New(crawlStockInfo[5], series.String, "low"),
+	series.New(crawlStockInfo[6], series.String, "volume"),
+)
+df = df.RBind(addRow)
+```
 - gota dataframe 만들기
+```
+df := dataframe.New(
+	series.New(crawlStockInfo[0], series.String, "date"),
+	series.New(crawlStockInfo[1], series.String, "close"),
+	series.New(crawlStockInfo[2], series.Int, "diff"),
+	series.New(crawlStockInfo[3], series.Int, "open"),
+	series.New(crawlStockInfo[4], series.Int, "high"),
+	series.New(crawlStockInfo[5], series.Int, "low"),
+	series.New(crawlStockInfo[6], series.Int, "volume"),
+)
+```
+- gota 데이터변경(Series Map 사용) 
+```
+// fill zero-padding
+sel2 := sel1.Col("code")
+zeroFill := func(e series.Element) series.Element {
+	result := e.Copy()
+	zeroResult := fmt.Sprintf("%06s", result.String())
+	result.Set(zeroResult)
+	return series.Element(result)
+}
+received := sel2.Map(zeroFill)
+```
+- gota 데이터 이름 변경 및 선택
+```
+companyInfo = cs.Rename("company", "회사명").
+	Rename("code", "종목코드").
+	Select([]string{"code", "company"})
+```
+- gota ReadHTML (option 넣어서 기본 타입을 String으로 설정) --> ReadHTML의 경우 th인식불가, td 안에 불필요한 데이터 있을 시 인식못함.
+`cs := dataframe.ReadHTML(strings.NewReader(htmlUTF8), dataframe.DetectTypes(false), dataframe.DefaultType(series.String))[0]`
 - mariaDB 접속 및 삽입
+```
+db, err := sql.Open("mysql", "root:password@tcp(ip:port)/DBNAME")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer db.Close()
+
+	// Connect and check the server version
+	//var version string
+	sql := `CREATE TABLE IF NOT EXISTS company_info (
+            	code VARCHAR(20),
+                company VARCHAR(40),
+                last_update DATE,
+                PRIMARY KEY(CODE) )`
+	db.Exec(sql)
+```
 - 정규표현식으로 문자열 수정
+```
+re, _ := regexp.Compile(`(<[/]?)th`)
+html := re.ReplaceAllString(string(data), "${1}td")
+```
 - strings.ReplaceAll 사용
+`strings.ReplaceAll("\n\nTEST\n\n", "\n", "")`
 - request 로 소스불러오기
-- gota 데이터선택(Series 선택) 
-- gota 데이터변경(Series Map 사용)
+
 - 한글인코딩
 ```
 // 한글인코딩이 깨져서, 한글을 UTF8로 변환? 헷갈리는 부분.
