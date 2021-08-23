@@ -46,7 +46,19 @@ if res.StatusCode != 200 {
 }
 defer res2.Body.Close()
 ```
+- request 로 소스불러오기
+```
+resp, err := http.Get(URL_KRX)
+if err != nil {
+	panic(err)
+}
+defer resp.Body.Close()
 
+data, err := ioutil.ReadAll(resp.Body)
+if err != nil {
+	panic(err)
+}
+```
 - jQuery 에서 원하는 정보 Find 후, 문자열 숫자로 변경
 ```
 tempHref, _ := doc.Find(".pgRR a").Attr("href")
@@ -72,7 +84,7 @@ doc2.Find("tr").Each(func(idx int, sel *goquery.Selection) {
 	}
 })
 ```
-- golang slice 사용 (make 로 미리 할당하나, append로 하나씩 넣어주나 시간복잡도 비슷한 것으로 추정)
+- golang slice 사용 (make 로 미리 할당하나, append로 하나씩 넣어주나 시간복잡도 비슷한 것으로 추정)<br>
 `crawlStockInfo := make([][]string, 7)`
 
 - 파일출력
@@ -135,7 +147,7 @@ companyInfo = cs.Rename("company", "회사명").
 	Rename("code", "종목코드").
 	Select([]string{"code", "company"})
 ```
-- gota ReadHTML (option 넣어서 기본 타입을 String으로 설정) --> ReadHTML의 경우 th인식불가, td 안에 불필요한 데이터 있을 시 인식못함.
+- gota ReadHTML (option 넣어서 기본 타입을 String으로 설정) --> ReadHTML의 경우 th인식불가, td 안에 불필요한 데이터 있을 시 인식못함.<br>
 `cs := dataframe.ReadHTML(strings.NewReader(htmlUTF8), dataframe.DetectTypes(false), dataframe.DefaultType(series.String))[0]`
 - mariaDB 접속 및 삽입
 ```
@@ -159,9 +171,9 @@ db, err := sql.Open("mysql", "root:password@tcp(ip:port)/DBNAME")
 re, _ := regexp.Compile(`(<[/]?)th`)
 html := re.ReplaceAllString(string(data), "${1}td")
 ```
-- strings.ReplaceAll 사용
+- strings.ReplaceAll 사용<br>
 `strings.ReplaceAll("\n\nTEST\n\n", "\n", "")`
-- request 로 소스불러오기
+
 
 - 한글인코딩
 ```
